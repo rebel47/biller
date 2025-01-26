@@ -63,7 +63,7 @@ try:
 
         if result:
             hashed_password = result[0]
-            if stauth.Hasher([password]).verify(hashed_password):
+            if stauth.Hasher().verify(password, hashed_password):
                 st.session_state["authentication_status"] = True
                 st.session_state["username"] = username
                 st.rerun()
@@ -257,7 +257,7 @@ if not st.session_state.get("authentication_status"):
         else:
             try:
                 # Hash the password
-                hashed_password = stauth.Hasher([register_password]).hash()[0]
+                hashed_password = stauth.Hasher().hash(register_password)[0]
 
                 # Save the user to the database
                 user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
