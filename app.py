@@ -40,8 +40,15 @@ user_conn.commit()
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Login widget
-try:
+# Initialize session state for authentication
+if "authentication_status" not in st.session_state:
+    st.session_state["authentication_status"] = False
+if "username" not in st.session_state:
+    st.session_state["username"] = None
+
+# Login widget (only show if not logged in)
+if not st.session_state.get("authentication_status"):
+    st.header("Login")
     username = st.text_input("Username", key="login_username")
     password = st.text_input("Password", type="password", key="login_password")
 
@@ -56,18 +63,22 @@ try:
             if hash_password(password) == hashed_password:
                 st.session_state["authentication_status"] = True
                 st.session_state["username"] = username
-                st.rerun()
+                st.rerun()  # Refresh the page to update the UI
             else:
                 st.error("Incorrect password")
         else:
             st.error("Username not found")
-except Exception as e:
-    st.error(e)
 
 # Check authentication status
 if st.session_state.get("authentication_status"):
     # User is authenticated
     st.write(f'Welcome *{st.session_state["username"]}*')
+
+    # Logout button
+    if st.button("Logout"):
+        st.session_state["authentication_status"] = False
+        st.session_state["username"] = None
+        st.rerun()  # Refresh the page to update the UI
 
     # Initialize SQLite database for the user's bills
     user_db_path = f"bills_{st.session_state['username']}.db"
