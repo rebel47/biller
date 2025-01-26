@@ -10,6 +10,16 @@ import io
 import re
 import streamlit_authenticator as stauth
 
+# Register custom adapter for datetime objects
+def adapt_datetime(dt):
+    return dt.isoformat()
+
+def convert_datetime(ts):
+    return datetime.fromisoformat(ts.decode())
+
+sqlite3.register_adapter(datetime, adapt_datetime)
+sqlite3.register_converter("datetime", convert_datetime)
+
 # Load environment variables and configure Gemini API
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
@@ -242,7 +252,7 @@ elif st.session_state["authentication_status"] is None:
 # Registration widget (only show if not logged in)
 if not st.session_state["authentication_status"]:
     try:
-        if authenticator.register_user(preauthorized_emails=preauthorized["emails"]):
+        if authenticator.register_user():
             st.success("User registered successfully")
     except Exception as e:
         st.error(e)
