@@ -8,7 +8,7 @@ import os
 from PIL import Image
 import io
 import re
-import streamlit_authenticator as stauth
+import hashlib  # For password hashing
 
 # Register custom adapter for datetime objects
 def adapt_datetime(dt):
@@ -36,20 +36,9 @@ user_c.execute('''CREATE TABLE IF NOT EXISTS users
                    password TEXT)''')
 user_conn.commit()
 
-# Load cookie settings from Streamlit Secrets
-cookie = {
-    "expiry_days": int(st.secrets["cookie"]["expiry_days"]),
-    "key": st.secrets["cookie"]["key"],
-    "name": st.secrets["cookie"]["name"],
-}
-
-# Initialize authenticator
-authenticator = stauth.Authenticate(
-    {"usernames": {}},  # Provide an empty 'usernames' key
-    cookie['name'],
-    cookie['key'],
-    cookie['expiry_days']
-)
+# Function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # Login widget
 try:
@@ -63,7 +52,8 @@ try:
 
         if result:
             hashed_password = result[0]
-            if stauth.Hasher().verify(password, hashed_password):
+            # Verify the password
+            if hash_password(password) == hashed_password:
                 st.session_state["authentication_status"] = True
                 st.session_state["username"] = username
                 st.rerun()
@@ -78,7 +68,6 @@ except Exception as e:
 if st.session_state.get("authentication_status"):
     # User is authenticated
     st.write(f'Welcome *{st.session_state["username"]}*')
-    authenticator.logout()
 
     # Initialize SQLite database for the user's bills
     user_db_path = f"bills_{st.session_state['username']}.db"
@@ -161,9 +150,6 @@ if st.session_state.get("authentication_status"):
             # Process the bill using Gemini API
             extracted_text, amount, categorized_items = process_bill_with_gemini(image_data, mime_type)
             if extracted_text:
-                # Commented out for now (debugging feature)
-                # if st.checkbox("Show Extracted Text (for debugging)"):
-                #     st.write("Extracted Information:", extracted_text)
                 st.write("Categorized Items:", categorized_items)
 
                 # Pre-fill the amount field
@@ -257,8 +243,8 @@ if not st.session_state.get("authentication_status"):
         else:
             try:
                 # Hash the password
-                hashed_password = stauth.Hasher([register_password]).generate()[0]
-    
+                hashed_password = hash_password(register_password)
+
                 # Save the user to the database
                 user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
                                (register_username, register_email, register_name, hashed_password))
