@@ -51,34 +51,123 @@ authenticator = stauth.Authenticate(
     cookie['expiry_days']
 )
 
-# Login widget
-try:
-    username = st.text_input("Username", key="login_username")
-    password = st.text_input("Password", type="password", key="login_password")
+# Function to convert image format and handle MIME type
+def convert_image_format(uploaded_file):
+    try:
+        image = Image.open(uploaded_file)
+        buffer = io.BytesIO()
+        image = image.convert("RGB")  # Ensure compatibility
+        image.save(buffer, format="JPEG")
+        buffer.seek(0)
+        return buffer, "image/jpeg"
+    except Exception as e:
+        st.error(f"Error processing image: {e}")
+        return None, None
 
-    if st.button("Login"):
-        # Fetch user credentials from the database
-        user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
-        result = user_c.fetchone()
+# Function to prepare image data
+def input_image_setup(uploaded_file):
+    converted_file, mime_type = convert_image_format(uploaded_file)
+    if converted_file:
+        bytes_data = converted_file.getvalue()
+        return bytes_data, mime_type
+    return None, None
 
-        if result:
-            hashed_password = result[0]
-            if stauth.Hasher().verify(password, hashed_password):
-                st.session_state["authentication_status"] = True
-                st.session_state["username"] = username
-                st.rerun()
+# Function to extract amount from text
+def extract_amount(text):
+    amount_pattern = r"Total Amount: €(\d+\.\d{2})"
+    match = re.search(amount_pattern, text)
+    if match:
+        return float(match.group(1))
+    return 0.0
+
+# Function to process bill with Gemini API
+def process_bill_with_gemini(image_data, mime_type):
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content([
+            {"mime_type": mime_type, "data": image_data},
+            "Extract the total amount, date, and items from this bill. Also, categorize each item into one of these categories: grocery, utensil, clothing, or miscellaneous. Return the results as a JSON list of dictionaries with 'item', 'category', and 'amount' keys.",
+        ])
+        extracted_text = response.text
+
+        # Extract the total amount
+        amount = extract_amount(extracted_text)
+
+        # Parse categorized items from JSON string (commented out for now)
+        # categorized_items = extract_json_from_response(extracted_text)
+        categorized_items = None  # Placeholder for future use
+
+        return extracted_text, amount, categorized_items
+    except Exception as e:
+        st.error(f"Error processing bill with Gemini: {e}")
+        return None, 0.0, None
+
+# Function to delete an item from the database
+def delete_item(item_id):
+    c.execute("DELETE FROM bills WHERE id = ?", (item_id,))
+    conn.commit()
+    st.success("Item deleted successfully!")
+
+# Main app
+st.title("Bill Tracker Application")
+
+# Registration and Login Section
+if not st.session_state.get("authentication_status"):
+    # Tabs for Login and Registration
+    tab1, tab2 = st.tabs(["Login", "Register"])
+    
+    with tab1:
+        st.header("Login")
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+
+        if st.button("Login"):
+            # Fetch user credentials from the database
+            user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
+            result = user_c.fetchone()
+
+            if result:
+                hashed_password = result[0]
+                if stauth.Hasher().verify(password, hashed_password):
+                    st.session_state["authentication_status"] = True
+                    st.session_state["username"] = username
+                    st.rerun()
+                else:
+                    st.error("Incorrect password")
             else:
-                st.error("Incorrect password")
-        else:
-            st.error("Username not found")
-except Exception as e:
-    st.error(e)
+                st.error("Username not found")
 
-# Check authentication status
+    with tab2:
+        st.header("Register")
+        register_username = st.text_input("Username", key="register_username")
+        register_email = st.text_input("Email", key="register_email")
+        register_name = st.text_input("Name", key="register_name")
+        register_password = st.text_input("Password", type="password", key="register_password")
+        register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
+
+        if st.button("Register"):
+            if register_password != register_confirm_password:
+                st.error("Passwords do not match!")
+            else:
+                try:
+                    # Hash the password
+                    hashed_password = stauth.Hasher().hash(register_password)
+
+                    # Save the user to the database
+                    user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
+                                   (register_username, register_email, register_name, hashed_password))
+                    user_conn.commit()
+                    st.success("User registered successfully! Please log in.")
+                except sqlite3.IntegrityError:
+                    st.error("Username already exists. Please choose a different username.")
+
+# Main Application (only shown when authenticated)
 if st.session_state.get("authentication_status"):
-    # User is authenticated
     st.write(f'Welcome *{st.session_state["username"]}*')
-    authenticator.logout()
+    
+    if st.button("Logout"):
+        st.session_state["authentication_status"] = None
+        st.rerun()
 
     # Initialize SQLite database for the user's bills
     user_db_path = f"bills_{st.session_state['username']}.db"
@@ -92,66 +181,6 @@ if st.session_state.get("authentication_status"):
                   description TEXT)''')
     conn.commit()
 
-    # Function to convert image format and handle MIME type
-    def convert_image_format(uploaded_file):
-        try:
-            image = Image.open(uploaded_file)
-            buffer = io.BytesIO()
-            image = image.convert("RGB")  # Ensure compatibility
-            image.save(buffer, format="JPEG")
-            buffer.seek(0)
-            return buffer, "image/jpeg"
-        except Exception as e:
-            st.error(f"Error processing image: {e}")
-            return None, None
-
-    # Function to prepare image data
-    def input_image_setup(uploaded_file):
-        converted_file, mime_type = convert_image_format(uploaded_file)
-        if converted_file:
-            bytes_data = converted_file.getvalue()
-            return bytes_data, mime_type
-        return None, None
-
-    # Function to extract amount from text
-    def extract_amount(text):
-        amount_pattern = r"Total Amount: €(\d+\.\d{2})"
-        match = re.search(amount_pattern, text)
-        if match:
-            return float(match.group(1))
-        return 0.0
-
-    # Function to process bill with Gemini API
-    def process_bill_with_gemini(image_data, mime_type):
-        try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content([
-                {"mime_type": mime_type, "data": image_data},
-                "Extract the total amount, date, and items from this bill. Also, categorize each item into one of these categories: grocery, utensil, clothing, or miscellaneous. Return the results as a JSON list of dictionaries with 'item', 'category', and 'amount' keys.",
-            ])
-            extracted_text = response.text
-
-            # Extract the total amount
-            amount = extract_amount(extracted_text)
-
-            # Parse categorized items from JSON string (commented out for now)
-            # categorized_items = extract_json_from_response(extracted_text)
-            categorized_items = None  # Placeholder for future use
-
-            return extracted_text, amount, categorized_items
-        except Exception as e:
-            st.error(f"Error processing bill with Gemini: {e}")
-            return None, 0.0, None
-
-    # Function to delete an item from the database
-    def delete_item(item_id):
-        c.execute("DELETE FROM bills WHERE id = ?", (item_id,))
-        conn.commit()
-        st.success("Item deleted successfully!")
-
-    # Streamlit App
-    st.title("Bill Tracker Application")
-
     # Upload image
     uploaded_file = st.file_uploader("Upload a photo of your bill", type=["jpg", "jpeg", "png"])
     if uploaded_file is not None:
@@ -161,9 +190,6 @@ if st.session_state.get("authentication_status"):
             # Process the bill using Gemini API
             extracted_text, amount, categorized_items = process_bill_with_gemini(image_data, mime_type)
             if extracted_text:
-                # Commented out for now (debugging feature)
-                # if st.checkbox("Show Extracted Text (for debugging)"):
-                #     st.write("Extracted Information:", extracted_text)
                 st.write("Categorized Items:", categorized_items)
 
                 # Pre-fill the amount field
@@ -189,8 +215,8 @@ if st.session_state.get("authentication_status"):
     st.header("Manual Entry")
     manual_date = st.date_input("Date")
     manual_category = st.selectbox("Category", ["grocery", "utensil", "clothing", "miscellaneous"])
-    manual_amount = st.number_input("Amount", value=0.0)
-    manual_description = st.text_input("Description")
+    manual_amount = st.number_input("Amount", value=0.0, key="manual_amount")
+    manual_description = st.text_input("Description", key="manual_description")
 
     if st.button("Save Manual Entry"):
         c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
@@ -236,37 +262,6 @@ if st.session_state.get("authentication_status"):
 
     # Close database connection
     conn.close()
-
-elif st.session_state.get("authentication_status") is False:
-    st.error("Username/password is incorrect")
-elif st.session_state.get("authentication_status") is None:
-    st.warning("Please enter your username and password")
-
-# Registration widget (only show if not logged in)
-# Registration widget (only show if not logged in)
-if not st.session_state.get("authentication_status"):
-    st.header("Register")
-    register_username = st.text_input("Username", key="register_username")
-    register_email = st.text_input("Email", key="register_email")
-    register_name = st.text_input("Name", key="register_name")
-    register_password = st.text_input("Password", type="password", key="register_password")
-    register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
-
-    if st.button("Register"):
-        if register_password != register_confirm_password:
-            st.error("Passwords do not match!")
-        else:
-            try:
-                # Hash the password - Fixed implementation
-                hashed_password = stauth.Hasher([register_password]).hash()[0]
-
-                # Save the user to the database
-                user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
-                               (register_username, register_email, register_name, hashed_password))
-                user_conn.commit()
-                st.success("User registered successfully! Please log in.")
-            except sqlite3.IntegrityError:
-                st.error("Username already exists. Please choose a different username.")
 
 # Close user credentials database connection
 user_conn.close()
