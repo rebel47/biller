@@ -1,18 +1,14 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from datetime import datetime, timedelta  # Import timedelta
+from datetime import datetime
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
 from PIL import Image
 import io
 import re
-import hashlib
-from extra_streamlit_components import CookieManager  # For cookie management
-
-# Initialize CookieManager
-cookie_manager = CookieManager()
+import hashlib  # For password hashing
 
 # Register custom adapter for datetime objects
 def adapt_datetime(dt):
@@ -50,13 +46,6 @@ if "authentication_status" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state["username"] = None
 
-# Check for existing login cookie
-if not st.session_state.get("authentication_status"):
-    cookie = cookie_manager.get("login_cookie")
-    if cookie and "username" in cookie:
-        st.session_state["authentication_status"] = True
-        st.session_state["username"] = cookie["username"]
-
 # Login widget (only show if not logged in)
 if not st.session_state.get("authentication_status"):
     st.header("Login")
@@ -74,13 +63,6 @@ if not st.session_state.get("authentication_status"):
             if hash_password(password) == hashed_password:
                 st.session_state["authentication_status"] = True
                 st.session_state["username"] = username
-
-                # Set a login cookie
-                cookie_manager.set(
-                    "login_cookie",
-                    {"username": username},
-                    expires_at=datetime.now() + timedelta(days=7)  # Use timedelta
-                )
                 st.rerun()  # Refresh the page to update the UI
             else:
                 st.error("Incorrect password")
@@ -96,10 +78,6 @@ if st.session_state.get("authentication_status"):
     if st.button("Logout"):
         st.session_state["authentication_status"] = False
         st.session_state["username"] = None
-
-        # Delete the login cookie if it exists
-        if cookie_manager.get("login_cookie"):
-            cookie_manager.delete("login_cookie")
         st.rerun()  # Refresh the page to update the UI
 
     # Initialize SQLite database for the user's bills
