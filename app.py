@@ -257,7 +257,7 @@ if not st.session_state.get("authentication_status"):
         else:
             try:
                 # Hash the password
-                hashed_password = stauth.Hasher([register_password]).generate()[0]
+                hashed_password = stauth.Hasher([register_password]).hash()[0]
 
                 # Save the user to the database
                 user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
