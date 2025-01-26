@@ -53,8 +53,8 @@ authenticator = stauth.Authenticate(
 
 # Login widget
 try:
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    username = st.text_input("Username", key="login_username")
+    password = st.text_input("Password", type="password", key="login_password")
 
     if st.button("Login"):
         # Fetch user credentials from the database
@@ -245,11 +245,11 @@ elif st.session_state.get("authentication_status") is None:
 # Registration widget (only show if not logged in)
 if not st.session_state.get("authentication_status"):
     st.header("Register")
-    register_username = st.text_input("Username")
-    register_email = st.text_input("Email")
-    register_name = st.text_input("Name")
-    register_password = st.text_input("Password", type="password")
-    register_confirm_password = st.text_input("Confirm Password", type="password")
+    register_username = st.text_input("Username", key="register_username")
+    register_email = st.text_input("Email", key="register_email")
+    register_name = st.text_input("Name", key="register_name")
+    register_password = st.text_input("Password", type="password", key="register_password")
+    register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
 
     if st.button("Register"):
         if register_password != register_confirm_password:
