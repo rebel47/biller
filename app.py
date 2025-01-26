@@ -45,7 +45,7 @@ cookie = {
 
 # Initialize authenticator
 authenticator = stauth.Authenticate(
-    {},  # Empty credentials (we're using the database instead)
+    {"usernames": {}},  # Provide an empty 'usernames' key
     cookie['name'],
     cookie['key'],
     cookie['expiry_days']
