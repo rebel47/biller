@@ -229,3 +229,56 @@ if not st.session_state["authentication_status"]:
                 yaml.dump(config, file, default_flow_style=False)
     except Exception as e:
         st.error(e)
+        
+        
+# Load authentication config from Streamlit Secrets
+credentials = {
+    "usernames": {
+        "jsmith": {
+            "email": st.secrets["credentials"]["usernames"]["jsmith"]["email"],
+            "name": st.secrets["credentials"]["usernames"]["jsmith"]["name"],
+            "password": st.secrets["credentials"]["usernames"]["jsmith"]["password"],
+        },
+        "logickiddie": {
+            "email": st.secrets["credentials"]["usernames"]["logickiddie"]["email"],
+            "failed_login_attempts": st.secrets["credentials"]["usernames"]["logickiddie"]["failed_login_attempts"],
+            "first_name": st.secrets["credentials"]["usernames"]["logickiddie"]["first_name"],
+            "last_name": st.secrets["credentials"]["usernames"]["logickiddie"]["last_name"],
+            "logged_in": st.secrets["credentials"]["usernames"]["logickiddie"]["logged_in"],
+            "password": st.secrets["credentials"]["usernames"]["logickiddie"]["password"],
+            "password_hint": st.secrets["credentials"]["usernames"]["logickiddie"]["password_hint"],
+            "roles": st.secrets["credentials"]["usernames"]["logickiddie"]["roles"],
+        },
+        "moki": {
+            "email": st.secrets["credentials"]["usernames"]["moki"]["email"],
+            "first_name": st.secrets["credentials"]["usernames"]["moki"]["first_name"],
+            "last_name": st.secrets["credentials"]["usernames"]["moki"]["last_name"],
+            "logged_in": st.secrets["credentials"]["usernames"]["moki"]["logged_in"],
+            "password": st.secrets["credentials"]["usernames"]["moki"]["password"],
+            "password_hint": st.secrets["credentials"]["usernames"]["moki"]["password_hint"],
+            "roles": st.secrets["credentials"]["usernames"]["moki"]["roles"],
+        },
+        "rbriggs": {
+            "email": st.secrets["credentials"]["usernames"]["rbriggs"]["email"],
+            "name": st.secrets["credentials"]["usernames"]["rbriggs"]["name"],
+            "password": st.secrets["credentials"]["usernames"]["rbriggs"]["password"],
+        },
+    }
+}
+cookie = {
+    "expiry_days": int(st.secrets["cookie"]["expiry_days"]),
+    "key": st.secrets["cookie"]["key"],
+    "name": st.secrets["cookie"]["name"],
+}
+preauthorized = {
+    "emails": st.secrets["preauthorized"]["emails"],
+}
+
+# Initialize authenticator
+authenticator = stauth.Authenticate(
+    credentials,
+    cookie['name'],
+    cookie['key'],
+    cookie['expiry_days'],
+    preauthorized
+)
