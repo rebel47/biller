@@ -43,14 +43,83 @@ cookie = {
     "name": st.secrets["cookie"]["name"],
 }
 
-# Initialize authenticator
+# Function to get all users from database
+def get_users():
+    user_c.execute("SELECT username, email, name, password FROM users")
+    users = user_c.fetchall()
+    credentials = {"usernames": {}}
+    for user in users:
+        credentials["usernames"][user[0]] = {
+            "email": user[1],
+            "name": user[2],
+            "password": user[3]
+        }
+    return credentials
+
+# Initialize authenticator with current users
+credentials = get_users()
 authenticator = stauth.Authenticate(
-    {"usernames": {}},  # Provide an empty 'usernames' key
+    credentials,
     cookie['name'],
     cookie['key'],
     cookie['expiry_days']
 )
 
+# Main app
+st.title("Bill Tracker Application")
+
+# Registration and Login Section
+if not st.session_state.get("authentication_status"):
+    # Tabs for Login and Registration
+    tab1, tab2 = st.tabs(["Login", "Register"])
+    
+    with tab1:
+        st.header("Login")
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+
+        if st.button("Login"):
+            # Fetch user credentials from the database
+            user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
+            result = user_c.fetchone()
+
+            if result:
+                stored_password = result[0]
+                # Create a hasher with the stored password
+                if stauth.Hasher([stored_password]).verify(password, stored_password):
+                    st.session_state["authentication_status"] = True
+                    st.session_state["username"] = username
+                    st.rerun()
+                else:
+                    st.error("Incorrect password")
+            else:
+                st.error("Username not found")
+
+    with tab2:
+        st.header("Register")
+        register_username = st.text_input("Username", key="register_username")
+        register_email = st.text_input("Email", key="register_email")
+        register_name = st.text_input("Name", key="register_name")
+        register_password = st.text_input("Password", type="password", key="register_password")
+        register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
+
+        if st.button("Register"):
+            if register_password != register_confirm_password:
+                st.error("Passwords do not match!")
+            else:
+                try:
+                    # Hash the password correctly
+                    hashed_password = stauth.Hasher([register_password]).hash()[0]
+
+                    # Save the user to the database
+                    user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
+                                   (register_username, register_email, register_name, hashed_password))
+                    user_conn.commit()
+                    st.success("User registered successfully! Please log in.")
+                except sqlite3.IntegrityError:
+                    st.error("Username already exists. Please choose a different username.")
+
+# Rest of your application code remains the same...
 # Function to convert image format and handle MIME type
 def convert_image_format(uploaded_file):
     try:
