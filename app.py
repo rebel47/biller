@@ -256,8 +256,9 @@ if not st.session_state.get("authentication_status"):
             st.error("Passwords do not match!")
         else:
             try:
-                # Hash the password
-                hashed_password = stauth.Hasher().hash(register_password)[0]
+                # Hash the password - Fixed implementation
+                hasher = stauth.Hasher([register_password])
+                hashed_password = hasher.generate()[0]
 
                 # Save the user to the database
                 user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
