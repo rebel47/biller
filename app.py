@@ -8,18 +8,11 @@ import os
 from PIL import Image
 import io
 import re
-# import json  # Commented out for now
-import yaml
-from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 
 # Load environment variables and configure Gemini API
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-
-# Load authentication config
-#with open('config.yaml', 'r', encoding='utf-8') as file:
-#    config = yaml.load(file, Loader=SafeLoader)
 
 # Load authentication config from Streamlit Secrets
 credentials = {
@@ -69,16 +62,7 @@ authenticator = stauth.Authenticate(
     credentials,
     cookie['name'],
     cookie['key'],
-    cookie['expiry_days'],
-    preauthorized
-)
-
-# Initialize authenticator
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
+    cookie['expiry_days']
 )
 
 # Login widget
@@ -93,12 +77,8 @@ if st.session_state["authentication_status"]:
     st.write(f'Welcome *{st.session_state["name"]}*')
     authenticator.logout()
 
-    # Create a folder for user data if it doesn't exist
-    user_data_folder = "user_data"
-    os.makedirs(user_data_folder, exist_ok=True)
-
     # Initialize SQLite database for the user
-    user_db_path = os.path.join(user_data_folder, f"bills_{st.session_state['username']}.db")
+    user_db_path = f"bills_{st.session_state['username']}.db"
     conn = sqlite3.connect(user_db_path)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS bills
@@ -137,18 +117,6 @@ if st.session_state["authentication_status"]:
         if match:
             return float(match.group(1))
         return 0.0
-
-    # Function to extract JSON from Gemini response (commented out for now)
-    # def extract_json_from_response(response_text):
-    #     try:
-    #         # Find the JSON part in the response (if it exists)
-    #         start_index = response_text.find('[')
-    #         end_index = response_text.rfind(']') + 1
-    #         json_str = response_text[start_index:end_index]
-    #         return json.loads(json_str)
-    #     except Exception as e:
-    #         st.error(f"Error extracting JSON from response: {e}")
-    #         return None
 
     # Function to process bill with Gemini API
     def process_bill_with_gemini(image_data, mime_type):
@@ -274,12 +242,7 @@ elif st.session_state["authentication_status"] is None:
 # Registration widget (only show if not logged in)
 if not st.session_state["authentication_status"]:
     try:
-        if authenticator.register_user():
+        if authenticator.register_user(preauthorized_emails=preauthorized["emails"]):
             st.success("User registered successfully")
-            # Save updated config file
-            with open('config.yaml', 'w', encoding='utf-8') as file:
-                yaml.dump(config, file, default_flow_style=False)
     except Exception as e:
         st.error(e)
-        
-        
