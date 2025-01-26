@@ -177,58 +177,7 @@ def delete_item(item_id):
     conn.commit()
     st.success("Item deleted successfully!")
 
-# Main app
-st.title("Bill Tracker Application")
 
-# Registration and Login Section
-if not st.session_state.get("authentication_status"):
-    # Tabs for Login and Registration
-    tab1, tab2 = st.tabs(["Login", "Register"])
-    
-    with tab1:
-        st.header("Login")
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
-
-        if st.button("Login"):
-            # Fetch user credentials from the database
-            user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
-            result = user_c.fetchone()
-
-            if result:
-                hashed_password = result[0]
-                if stauth.Hasher().verify(password, hashed_password):
-                    st.session_state["authentication_status"] = True
-                    st.session_state["username"] = username
-                    st.rerun()
-                else:
-                    st.error("Incorrect password")
-            else:
-                st.error("Username not found")
-
-    with tab2:
-        st.header("Register")
-        register_username = st.text_input("Username", key="register_username")
-        register_email = st.text_input("Email", key="register_email")
-        register_name = st.text_input("Name", key="register_name")
-        register_password = st.text_input("Password", type="password", key="register_password")
-        register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
-
-        if st.button("Register"):
-            if register_password != register_confirm_password:
-                st.error("Passwords do not match!")
-            else:
-                try:
-                    # Hash the password
-                    hashed_password = stauth.Hasher().hash(register_password)
-
-                    # Save the user to the database
-                    user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
-                                   (register_username, register_email, register_name, hashed_password))
-                    user_conn.commit()
-                    st.success("User registered successfully! Please log in.")
-                except sqlite3.IntegrityError:
-                    st.error("Username already exists. Please choose a different username.")
 
 # Main Application (only shown when authenticated)
 if st.session_state.get("authentication_status"):
