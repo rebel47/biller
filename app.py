@@ -243,6 +243,7 @@ elif st.session_state.get("authentication_status") is None:
     st.warning("Please enter your username and password")
 
 # Registration widget (only show if not logged in)
+# Registration widget (only show if not logged in)
 if not st.session_state.get("authentication_status"):
     st.header("Register")
     register_username = st.text_input("Username", key="register_username")
@@ -257,8 +258,7 @@ if not st.session_state.get("authentication_status"):
         else:
             try:
                 # Hash the password - Fixed implementation
-                hasher = stauth.Hasher([register_password])
-                hashed_password = hasher.generate()[0]
+                hashed_password = stauth.Hasher([register_password]).hash()[0]
 
                 # Save the user to the database
                 user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
