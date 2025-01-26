@@ -24,52 +24,28 @@ sqlite3.register_converter("datetime", convert_datetime)
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Load authentication config from Streamlit Secrets
-credentials = {
-    "usernames": {
-        "jsmith": {
-            "email": st.secrets["credentials"]["usernames"]["jsmith"]["email"],
-            "name": st.secrets["credentials"]["usernames"]["jsmith"]["name"],
-            "password": st.secrets["credentials"]["usernames"]["jsmith"]["password"],
-        },
-        "logickiddie": {
-            "email": st.secrets["credentials"]["usernames"]["logickiddie"]["email"],
-            "failed_login_attempts": st.secrets["credentials"]["usernames"]["logickiddie"]["failed_login_attempts"],
-            "first_name": st.secrets["credentials"]["usernames"]["logickiddie"]["first_name"],
-            "last_name": st.secrets["credentials"]["usernames"]["logickiddie"]["last_name"],
-            "logged_in": st.secrets["credentials"]["usernames"]["logickiddie"]["logged_in"],
-            "password": st.secrets["credentials"]["usernames"]["logickiddie"]["password"],
-            "password_hint": st.secrets["credentials"]["usernames"]["logickiddie"]["password_hint"],
-            "roles": st.secrets["credentials"]["usernames"]["logickiddie"]["roles"],
-        },
-        "moki": {
-            "email": st.secrets["credentials"]["usernames"]["moki"]["email"],
-            "first_name": st.secrets["credentials"]["usernames"]["moki"]["first_name"],
-            "last_name": st.secrets["credentials"]["usernames"]["moki"]["last_name"],
-            "logged_in": st.secrets["credentials"]["usernames"]["moki"]["logged_in"],
-            "password": st.secrets["credentials"]["usernames"]["moki"]["password"],
-            "password_hint": st.secrets["credentials"]["usernames"]["moki"]["password_hint"],
-            "roles": st.secrets["credentials"]["usernames"]["moki"]["roles"],
-        },
-        "rbriggs": {
-            "email": st.secrets["credentials"]["usernames"]["rbriggs"]["email"],
-            "name": st.secrets["credentials"]["usernames"]["rbriggs"]["name"],
-            "password": st.secrets["credentials"]["usernames"]["rbriggs"]["password"],
-        },
-    }
-}
+# Initialize SQLite database for user credentials
+user_credentials_db_path = "user_credentials.db"
+user_conn = sqlite3.connect(user_credentials_db_path)
+user_c = user_conn.cursor()
+user_c.execute('''CREATE TABLE IF NOT EXISTS users
+                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   username TEXT UNIQUE,
+                   email TEXT,
+                   name TEXT,
+                   password TEXT)''')
+user_conn.commit()
+
+# Load cookie settings from Streamlit Secrets
 cookie = {
     "expiry_days": int(st.secrets["cookie"]["expiry_days"]),
     "key": st.secrets["cookie"]["key"],
     "name": st.secrets["cookie"]["name"],
 }
-preauthorized = {
-    "emails": st.secrets["preauthorized"]["emails"],
-}
 
 # Initialize authenticator
 authenticator = stauth.Authenticate(
-    credentials,
+    {},  # Empty credentials (we're using the database instead)
     cookie['name'],
     cookie['key'],
     cookie['expiry_days']
@@ -77,17 +53,34 @@ authenticator = stauth.Authenticate(
 
 # Login widget
 try:
-    authenticator.login()
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        # Fetch user credentials from the database
+        user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
+        result = user_c.fetchone()
+
+        if result:
+            hashed_password = result[0]
+            if stauth.Hasher([password]).verify(hashed_password):
+                st.session_state["authentication_status"] = True
+                st.session_state["username"] = username
+                st.rerun()
+            else:
+                st.error("Incorrect password")
+        else:
+            st.error("Username not found")
 except Exception as e:
     st.error(e)
 
 # Check authentication status
-if st.session_state["authentication_status"]:
+if st.session_state.get("authentication_status"):
     # User is authenticated
-    st.write(f'Welcome *{st.session_state["name"]}*')
+    st.write(f'Welcome *{st.session_state["username"]}*')
     authenticator.logout()
 
-    # Initialize SQLite database for the user
+    # Initialize SQLite database for the user's bills
     user_db_path = f"bills_{st.session_state['username']}.db"
     conn = sqlite3.connect(user_db_path)
     c = conn.cursor()
@@ -244,15 +237,35 @@ if st.session_state["authentication_status"]:
     # Close database connection
     conn.close()
 
-elif st.session_state["authentication_status"] is False:
+elif st.session_state.get("authentication_status") is False:
     st.error("Username/password is incorrect")
-elif st.session_state["authentication_status"] is None:
+elif st.session_state.get("authentication_status") is None:
     st.warning("Please enter your username and password")
 
 # Registration widget (only show if not logged in)
-if not st.session_state["authentication_status"]:
-    try:
-        if authenticator.register_user():
-            st.success("User registered successfully")
-    except Exception as e:
-        st.error(e)
+if not st.session_state.get("authentication_status"):
+    st.header("Register")
+    register_username = st.text_input("Username")
+    register_email = st.text_input("Email")
+    register_name = st.text_input("Name")
+    register_password = st.text_input("Password", type="password")
+    register_confirm_password = st.text_input("Confirm Password", type="password")
+
+    if st.button("Register"):
+        if register_password != register_confirm_password:
+            st.error("Passwords do not match!")
+        else:
+            try:
+                # Hash the password
+                hashed_password = stauth.Hasher([register_password]).generate()[0]
+
+                # Save the user to the database
+                user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
+                               (register_username, register_email, register_name, hashed_password))
+                user_conn.commit()
+                st.success("User registered successfully! Please log in.")
+            except sqlite3.IntegrityError:
+                st.error("Username already exists. Please choose a different username.")
+
+# Close user credentials database connection
+user_conn.close()
