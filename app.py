@@ -43,6 +43,13 @@ cookie = {
     "name": st.secrets["cookie"]["name"],
 }
 
+def hash_password(password: str) -> str:
+    return stauth.generate_hash(password)
+
+# Function to verify password
+def verify_password(password: str, hashed_password: str) -> bool:
+    return stauth.check_password(password, hashed_password)
+
 # Function to get all users from database
 def get_users():
     user_c.execute("SELECT username, email, name, password FROM users")
@@ -65,9 +72,6 @@ authenticator = stauth.Authenticate(
     cookie['expiry_days']
 )
 
-# Main app
-st.title("Bill Tracker Application")
-
 # Registration and Login Section
 if not st.session_state.get("authentication_status"):
     # Tabs for Login and Registration
@@ -85,8 +89,7 @@ if not st.session_state.get("authentication_status"):
 
             if result:
                 stored_password = result[0]
-                # Create a hasher with the stored password
-                if stauth.Hasher([stored_password]).verify(password, stored_password):
+                if verify_password(password, stored_password):
                     st.session_state["authentication_status"] = True
                     st.session_state["username"] = username
                     st.rerun()
@@ -108,8 +111,8 @@ if not st.session_state.get("authentication_status"):
                 st.error("Passwords do not match!")
             else:
                 try:
-                    # Hash the password correctly
-                    hashed_password = stauth.Hasher([register_password]).hash()[0]
+                    # Hash the password using the new function
+                    hashed_password = hash_password(register_password)
 
                     # Save the user to the database
                     user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
