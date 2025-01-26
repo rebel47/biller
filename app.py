@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta  # Import timedelta
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
@@ -76,7 +76,11 @@ if not st.session_state.get("authentication_status"):
                 st.session_state["username"] = username
 
                 # Set a login cookie
-                cookie_manager.set("login_cookie", {"username": username}, expires_at=datetime.now() + timedelta(days=7))
+                cookie_manager.set(
+                    "login_cookie",
+                    {"username": username},
+                    expires_at=datetime.now() + timedelta(days=7)  # Use timedelta
+                )
                 st.rerun()  # Refresh the page to update the UI
             else:
                 st.error("Incorrect password")
@@ -93,8 +97,9 @@ if st.session_state.get("authentication_status"):
         st.session_state["authentication_status"] = False
         st.session_state["username"] = None
 
-        # Delete the login cookie
-        cookie_manager.delete("login_cookie")
+        # Delete the login cookie if it exists
+        if cookie_manager.get("login_cookie"):
+            cookie_manager.delete("login_cookie")
         st.rerun()  # Refresh the page to update the UI
 
     # Initialize SQLite database for the user's bills
