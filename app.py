@@ -80,6 +80,7 @@ def process_bill_with_gemini(image_data, mime_type):
             "Extract the total amount, date, and items from this bill. Also, categorize each item into one of these categories: grocery, utensil, clothing, or miscellaneous. Return the results as a JSON list of dictionaries with 'item', 'category', and 'amount' keys.",
         ])
         extracted_text = response.text
+        st.write("Gemini API Response:", response.text)
 
         # Extract the total amount
         amount = extract_amount(extracted_text)
