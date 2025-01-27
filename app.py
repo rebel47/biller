@@ -5,10 +5,14 @@ from datetime import datetime
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
+import pillow_heif  # For HEIC support
 import io
 import re
 import hashlib  # For password hashing
+
+# Enable HEIC support
+pillow_heif.register_heif_opener()
 
 # Register custom adapter for datetime objects
 def adapt_datetime(dt):
@@ -39,6 +43,60 @@ user_conn.commit()
 # Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+# Function to convert image format and handle MIME type
+def convert_image_format(uploaded_file):
+    try:
+        image = Image.open(uploaded_file)
+        buffer = io.BytesIO()
+        image = image.convert("RGB")  # Ensure compatibility
+        image.save(buffer, format="JPEG")
+        buffer.seek(0)
+        return buffer, "image/jpeg"
+    except UnidentifiedImageError:
+        raise ValueError("Unsupported image format. Please upload PNG, JPEG, or HEIC images.")
+
+# Function to prepare image data
+def input_image_setup(uploaded_file):
+    converted_file, mime_type = convert_image_format(uploaded_file)
+    bytes_data = converted_file.getvalue()
+    return bytes_data, mime_type
+
+# Function to extract amount from text
+def extract_amount(text):
+    amount_pattern = r"Total Amount: €(\d+\.\d{2})"
+    match = re.search(amount_pattern, text)
+    if match:
+        return float(match.group(1))
+    return 0.0
+
+# Function to process bill with Gemini API
+def process_bill_with_gemini(image_data, mime_type):
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content([
+            {"mime_type": mime_type, "data": image_data},
+            "Extract the total amount, date, and items from this bill. Also, categorize each item into one of these categories: grocery, utensil, clothing, or miscellaneous. Return the results as a JSON list of dictionaries with 'item', 'category', and 'amount' keys.",
+        ])
+        extracted_text = response.text
+
+        # Extract the total amount
+        amount = extract_amount(extracted_text)
+
+        # Parse categorized items from JSON string (commented out for now)
+        # categorized_items = extract_json_from_response(extracted_text)
+        categorized_items = None  # Placeholder for future use
+
+        return extracted_text, amount, categorized_items
+    except Exception as e:
+        st.error(f"Error processing bill with Gemini: {e}")
+        return None, 0.0, None
+
+# Function to delete an item from the database
+def delete_item(item_id):
+    c.execute("DELETE FROM bills WHERE id = ?", (item_id,))
+    conn.commit()
+    st.success("Item deleted successfully!")
 
 # Initialize session state for authentication
 if "authentication_status" not in st.session_state:
@@ -132,72 +190,20 @@ if st.session_state.get("authentication_status"):
                   description TEXT)''')
     conn.commit()
 
-    # Function to convert image format and handle MIME type
-    def convert_image_format(uploaded_file):
-        try:
-            image = Image.open(uploaded_file)
-            buffer = io.BytesIO()
-            image = image.convert("RGB")  # Ensure compatibility
-            image.save(buffer, format="JPEG")
-            buffer.seek(0)
-            return buffer, "image/jpeg"
-        except Exception as e:
-            st.error(f"Error processing image: {e}")
-            return None, None
-
-    # Function to prepare image data
-    def input_image_setup(uploaded_file):
-        converted_file, mime_type = convert_image_format(uploaded_file)
-        if converted_file:
-            bytes_data = converted_file.getvalue()
-            return bytes_data, mime_type
-        return None, None
-
-    # Function to extract amount from text
-    def extract_amount(text):
-        amount_pattern = r"Total Amount: €(\d+\.\d{2})"
-        match = re.search(amount_pattern, text)
-        if match:
-            return float(match.group(1))
-        return 0.0
-
-    # Function to process bill with Gemini API
-    def process_bill_with_gemini(image_data, mime_type):
-        try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content([
-                {"mime_type": mime_type, "data": image_data},
-                "Extract the total amount, date, and items from this bill. Also, categorize each item into one of these categories: grocery, utensil, clothing, or miscellaneous. Return the results as a JSON list of dictionaries with 'item', 'category', and 'amount' keys.",
-            ])
-            extracted_text = response.text
-
-            # Extract the total amount
-            amount = extract_amount(extracted_text)
-
-            # Parse categorized items from JSON string (commented out for now)
-            # categorized_items = extract_json_from_response(extracted_text)
-            categorized_items = None  # Placeholder for future use
-
-            return extracted_text, amount, categorized_items
-        except Exception as e:
-            st.error(f"Error processing bill with Gemini: {e}")
-            return None, 0.0, None
-
-    # Function to delete an item from the database
-    def delete_item(item_id):
-        c.execute("DELETE FROM bills WHERE id = ?", (item_id,))
-        conn.commit()
-        st.success("Item deleted successfully!")
-
     # Streamlit App
     st.title("Biller")
 
     # Upload image
-    uploaded_file = st.file_uploader("Upload a photo of your bill", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader("Upload a photo of your bill", type=["jpg", "jpeg", "png", "heic"])
     if uploaded_file is not None:
-        # Prepare image data
-        image_data, mime_type = input_image_setup(uploaded_file)
-        if image_data and mime_type:
+        try:
+            # Display the uploaded image
+            image = Image.open(uploaded_file)
+            st.image(image, caption="Uploaded Image.", use_container_width=True)
+
+            # Prepare image data
+            image_data, mime_type = input_image_setup(uploaded_file)
+
             # Process the bill using Gemini API
             extracted_text, amount, categorized_items = process_bill_with_gemini(image_data, mime_type)
             if extracted_text:
@@ -221,6 +227,10 @@ if st.session_state.get("authentication_status"):
                                   (date, "miscellaneous", amount, description))
                     conn.commit()
                     st.success("Bill saved successfully!")
+        except UnidentifiedImageError:
+            st.error("Unsupported image format. Please upload PNG, JPEG, or HEIC images.")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
 
     # Manual entry option
     st.header("Manual Entry")
@@ -273,11 +283,6 @@ if st.session_state.get("authentication_status"):
 
     # Close database connection
     conn.close()
-
-#elif st.session_state.get("authentication_status") is False:
-#    st.error("Username/password is incorrect")
-elif st.session_state.get("authentication_status") is None:
-    st.warning("Please enter your username and password")
 
 # Close user credentials database connection
 user_conn.close()
