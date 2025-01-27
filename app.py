@@ -29,6 +29,10 @@ sqlite3.register_converter("datetime", convert_datetime)
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+model = genai.GenerativeModel("gemini-1.5-flash")
+response = model.generate_content("Hello, world!")
+print(response.text)
+
 # Initialize SQLite database for user credentials
 user_credentials_db_path = "user_credentials.db"
 user_conn = sqlite3.connect(user_credentials_db_path)
