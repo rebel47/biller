@@ -30,8 +30,8 @@ Before running the application, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/bill-tracker.git
-   cd bill-tracker
+   git clone https://github.com/rebel47/biller.git
+   cd biller
    ```
 
 2. **Install the required Python packages**:
