@@ -6,10 +6,10 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import os
 from PIL import Image, UnidentifiedImageError
-import pillow_heif  # For HEIC support
+import pillow_heif
 import io
 import re
-import hashlib  # For password hashing
+import hashlib
 import time
 
 # Enable HEIC support
@@ -29,7 +29,6 @@ sqlite3.register_converter("datetime", convert_datetime)
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-
 # Initialize SQLite database for user credentials
 user_credentials_db_path = "user_credentials.db"
 user_conn = sqlite3.connect(user_credentials_db_path)
@@ -42,29 +41,25 @@ user_c.execute('''CREATE TABLE IF NOT EXISTS users
                    password TEXT)''')
 user_conn.commit()
 
-# Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Function to convert image format and handle MIME type
 def convert_image_format(uploaded_file):
     try:
         image = Image.open(uploaded_file)
         buffer = io.BytesIO()
-        image = image.convert("RGB")  # Ensure compatibility
+        image = image.convert("RGB")
         image.save(buffer, format="JPEG")
         buffer.seek(0)
         return buffer, "image/jpeg"
     except UnidentifiedImageError:
         raise ValueError("Unsupported image format. Please upload PNG, JPEG, or HEIC images.")
 
-# Function to prepare image data
 def input_image_setup(uploaded_file):
     converted_file, mime_type = convert_image_format(uploaded_file)
     bytes_data = converted_file.getvalue()
     return bytes_data, mime_type
 
-# Function to extract amount from text
 def extract_amount(text):
     amount_pattern = r"Total Amount: €(\d+\.\d{2})"
     match = re.search(amount_pattern, text)
@@ -72,53 +67,96 @@ def extract_amount(text):
         return float(match.group(1))
     return 0.0
 
-# Function to process bill with Gemini API
+def extract_categorized_items(text):
+    items = []
+    lines = text.split('\n')
+    for line in lines:
+        if line.startswith('-'):
+            item_pattern = r"- (.*?): €(\d+\.\d{2}) \(Category: (.*?)\)"
+            match = re.match(item_pattern, line)
+            if match:
+                item_name = match.group(1)
+                item_amount = float(match.group(2))
+                item_category = match.group(3)
+                items.append({
+                    'item': item_name,
+                    'amount': item_amount,
+                    'category': item_category
+                })
+    return items
+
 def process_bill_with_gemini(image_data, mime_type):
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content([
-            {"mime_type": mime_type, "data": image_data},
-            "Extract the total amount, date, and items from this bill. Also, categorize each item into one of these categories: grocery, utensil, clothing, or miscellaneous. Return the results as a JSON list of dictionaries with 'item', 'category', and 'amount' keys.",
-        ])
-        extracted_text = response.text
-        st.write("Gemini API Response:", response.text)
+        model = genai.GenerativeModel(
+            "gemini-1.5-flash",
+            safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        )
 
-        # Extract the total amount
-        amount = extract_amount(extracted_text)
+        prompt = """
+        Please analyze this bill image and extract the following information:
+        1. Total amount
+        2. Date of purchase
+        3. Individual items and their prices
+        
+        Format the response as follows:
+        Total Amount: €XX.XX
+        Date: YYYY-MM-DD
+        Items:
+        - Item 1: €XX.XX (Category: grocery/utensil/clothing/miscellaneous)
+        - Item 2: €XX.XX (Category: grocery/utensil/clothing/miscellaneous)
+        """
 
-        # Parse categorized items from JSON string (commented out for now)
-        # categorized_items = extract_json_from_response(extracted_text)
-        categorized_items = None  # Placeholder for future use
+        generation_config = {
+            "temperature": 0.1,
+            "top_p": 1,
+            "top_k": 32,
+            "max_output_tokens": 2048,
+        }
+        
+        response = model.generate_content(
+            [
+                {"mime_type": mime_type, "data": image_data},
+                prompt
+            ],
+            generation_config=generation_config
+        )
 
-        return extracted_text, amount, categorized_items
+        amount = extract_amount(response.text)
+        categorized_items = extract_categorized_items(response.text)
+        return response.text, amount, categorized_items
+
     except Exception as e:
-        st.error(f"Error processing bill with Gemini: {e}")
+        st.error(f"Error processing bill with Gemini: {str(e)}")
         return None, 0.0, None
 
-# Function to delete an item from the database
+
 def delete_item(item_id):
     c.execute("DELETE FROM bills WHERE id = ?", (item_id,))
     conn.commit()
     st.success("Item deleted successfully!")
 
-# Initialize session state for authentication
+# Initialize session state
 if "authentication_status" not in st.session_state:
     st.session_state["authentication_status"] = False
 if "username" not in st.session_state:
     st.session_state["username"] = None
 
-# Login widget (only show if not logged in)
+# Login/Register Section
 if not st.session_state.get("authentication_status"):
     st.title("Welcome to Biller")
     st.text("- Developed By: Mohammad Ayaz Alam")
     
-    # Add a segmented control-like experience using st.radio
     auth_option = st.radio(
         "Choose an option",
         ["Login", "Register"],
-        index=0,  # Default to Login
-        horizontal=True,  # Display options horizontally
-        label_visibility="collapsed"  # Hide the label for a cleaner look
+        index=0,
+        horizontal=True,
+        label_visibility="collapsed"
     )
 
     if auth_option == "Login":
@@ -129,21 +167,15 @@ if not st.session_state.get("authentication_status"):
             login_submitted = st.form_submit_button("Login")
 
             if login_submitted:
-                # Fetch user credentials from the database
                 user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
                 result = user_c.fetchone()
 
-                if result:
-                    hashed_password = result[0]
-                    # Verify the password
-                    if hash_password(password) == hashed_password:
-                        st.session_state["authentication_status"] = True
-                        st.session_state["username"] = username
-                        st.rerun()  # Refresh the page to update the UI
-                    else:
-                        st.error("Incorrect password")
+                if result and hash_password(password) == result[0]:
+                    st.session_state["authentication_status"] = True
+                    st.session_state["username"] = username
+                    st.rerun()
                 else:
-                    st.error("Username not found")
+                    st.error("Invalid credentials")
     else:
         st.header("Register")
         with st.form("register_form"):
@@ -159,29 +191,24 @@ if not st.session_state.get("authentication_status"):
                     st.error("Passwords do not match!")
                 else:
                     try:
-                        # Hash the password
                         hashed_password = hash_password(register_password)
-
-                        # Save the user to the database
                         user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
-                                       (register_username, register_email, register_name, hashed_password))
+                                     (register_username, register_email, register_name, hashed_password))
                         user_conn.commit()
-                        st.success("User registered successfully! Please log in.")
+                        st.success("Registration successful! Please login.")
                     except sqlite3.IntegrityError:
-                        st.error("Username already exists. Please choose a different username.")
+                        st.error("Username already exists")
 
-# Check authentication status
+# Main Application (After Authentication)
 if st.session_state.get("authentication_status"):
-    # User is authenticated
     st.write(f'Welcome *{st.session_state["username"]}*')
 
-    # Logout button
     if st.button("Logout"):
         st.session_state["authentication_status"] = False
         st.session_state["username"] = None
-        st.rerun()  # Refresh the page to update the UI
+        st.rerun()
 
-    # Initialize SQLite database for the user's bills
+    # Initialize user's database
     user_db_path = f"bills_{st.session_state['username']}.db"
     conn = sqlite3.connect(user_db_path)
     c = conn.cursor()
@@ -193,31 +220,24 @@ if st.session_state.get("authentication_status"):
                   description TEXT)''')
     conn.commit()
 
-    # Streamlit App
     st.title("Biller")
 
+    # File upload with processing message
     # Upload image
     uploaded_file = st.file_uploader("Upload a photo of your bill", type=["jpg", "jpeg", "png", "heic"])
+    # In the main application section, update the saving logic:
     if uploaded_file is not None:
         try:
-            # Display the uploaded image
-            image = Image.open(uploaded_file)
-            st.image(image, caption="Uploaded Image.", use_column_width=True)
-
-            # Prepare image data
             with st.spinner("Processing image..."):
                 image_data, mime_type = input_image_setup(uploaded_file)
-
-                # Process the bill using Gemini API
                 extracted_text, amount, categorized_items = process_bill_with_gemini(image_data, mime_type)
 
             if extracted_text:
                 st.success("Image processed successfully!")
-                st.write("Categorized Items:", categorized_items)
-
-                # Pre-fill the amount field
-                amount = st.number_input("Enter the amount", value=amount)
-                description = st.text_input("Enter a description", value=extracted_text)
+                
+                # Pre-fill the amount field with extracted amount
+                #amount = st.number_input("Enter the amount", value=amount)
+                #description = st.text_input("Enter a description", value=extracted_text)
 
                 # Save to database
                 if st.button("Save Bill"):
@@ -226,70 +246,62 @@ if st.session_state.get("authentication_status"):
                         # Save each categorized item separately
                         for item in categorized_items:
                             c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
-                                      (date, item['category'], item['amount'], item['item']))
+                                    (date, item['category'], item['amount'], item['item']))
                     else:
                         # Save the entire bill as one entry
                         c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
-                                  (date, "miscellaneous", amount, description))
+                                (date, "miscellaneous", amount, description))
                     conn.commit()
                     st.success("Bill saved successfully!")
-        except UnidentifiedImageError:
-            st.error("Unsupported image format. Please upload PNG, JPEG, or HEIC images.")
         except Exception as e:
-            st.error(f"An error occurred: {e}")
-            st.error(f"Details: {str(e)}")
+            st.error(f"Error: {str(e)}")
 
-    # Manual entry option
+    # Manual Entry Section
     st.header("Manual Entry")
     manual_date = st.date_input("Date")
-    manual_category = st.selectbox("Category", ["grocery", "utensil", "clothing", "miscellaneous"])
-    manual_amount = st.number_input("Amount", value=0.0)
-    manual_description = st.text_input("Description")
+    manual_category = st.selectbox("Category ", ["grocery", "utensil", "clothing", "miscellaneous"])
+    manual_amount = st.number_input("Amount ", value=0.0)
+    manual_description = st.text_input("Description ")
 
     if st.button("Save Manual Entry"):
         c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
                   (manual_date, manual_category, manual_amount, manual_description))
         conn.commit()
-        st.success("Manual entry saved successfully!")
+        st.success("Entry saved!")
 
-    # Display all bills with delete buttons
+    # Display Bills
     st.header("All Bills")
     bills_df = pd.read_sql_query("SELECT * FROM bills", conn)
-
-    # Add a delete button for each row
     if not bills_df.empty:
-        bills_df['Delete'] = False  # Add a column for delete buttons
+        bills_df['Delete'] = False
         edited_df = st.data_editor(
             bills_df,
             column_config={
-                "Delete": st.column_config.CheckboxColumn("Delete", help="Select to delete this item", default=False)
+                "Delete": st.column_config.CheckboxColumn("Delete", help="Select to delete")
             },
             hide_index=True,
             use_container_width=True,
         )
 
-        # Delete selected items
-        if st.button("Delete Selected Items"):
+        if st.button("Delete Selected"):
             items_to_delete = edited_df[edited_df['Delete']]['id'].tolist()
             for item_id in items_to_delete:
                 delete_item(item_id)
-            st.rerun()  # Refresh the page to reflect changes
+            st.rerun()
 
-    # Display total amount
+    # Summary Section
     total_amount = bills_df['amount'].sum()
     st.write(f"Total Amount: {total_amount}")
 
-    # Display previous months' data (sorted by latest month first)
-    st.header("Previous Months' Data")
+    # Monthly Summary
+    st.header("Monthly Summary")
     if not bills_df.empty:
         bills_df['date'] = pd.to_datetime(bills_df['date'])
         bills_df['month'] = bills_df['date'].dt.to_period('M')
         monthly_summary = bills_df.groupby('month')['amount'].sum().reset_index()
-        monthly_summary = monthly_summary.sort_values(by='month', ascending=False)  # Sort by latest month first
+        monthly_summary = monthly_summary.sort_values(by='month', ascending=False)
         st.write(monthly_summary)
 
-    # Close database connection
     conn.close()
 
-# Close user credentials database connection
 user_conn.close()
