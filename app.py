@@ -234,8 +234,8 @@ if st.session_state.get("authentication_status"):
     # Close database connection
     conn.close()
 
-elif st.session_state.get("authentication_status") is False:
-    st.error("Username/password is incorrect")
+#elif st.session_state.get("authentication_status") is False:
+#    st.error("Username/password is incorrect")
 elif st.session_state.get("authentication_status") is None:
     st.warning("Please enter your username and password")
 
