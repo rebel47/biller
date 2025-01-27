@@ -48,26 +48,66 @@ if "username" not in st.session_state:
 
 # Login widget (only show if not logged in)
 if not st.session_state.get("authentication_status"):
-    st.header("Login")
-    username = st.text_input("Username", key="login_username")
-    password = st.text_input("Password", type="password", key="login_password")
+    st.title("Welcome to Biller")
+    st.text("- Developed By: Mohammad Ayaz Alam")
+    
+    # Add a segmented control-like experience using st.radio
+    auth_option = st.radio(
+        "Choose an option",
+        ["Login", "Register"],
+        index=0,  # Default to Login
+        horizontal=True,  # Display options horizontally
+        label_visibility="collapsed"  # Hide the label for a cleaner look
+    )
 
-    if st.button("Login"):
-        # Fetch user credentials from the database
-        user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
-        result = user_c.fetchone()
+    if auth_option == "Login":
+        st.header("Login")
+        with st.form("login_form"):
+            username = st.text_input("Username", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            login_submitted = st.form_submit_button("Login")
 
-        if result:
-            hashed_password = result[0]
-            # Verify the password
-            if hash_password(password) == hashed_password:
-                st.session_state["authentication_status"] = True
-                st.session_state["username"] = username
-                st.rerun()  # Refresh the page to update the UI
-            else:
-                st.error("Incorrect password")
-        else:
-            st.error("Username not found")
+            if login_submitted:
+                # Fetch user credentials from the database
+                user_c.execute("SELECT password FROM users WHERE username = ?", (username,))
+                result = user_c.fetchone()
+
+                if result:
+                    hashed_password = result[0]
+                    # Verify the password
+                    if hash_password(password) == hashed_password:
+                        st.session_state["authentication_status"] = True
+                        st.session_state["username"] = username
+                        st.rerun()  # Refresh the page to update the UI
+                    else:
+                        st.error("Incorrect password")
+                else:
+                    st.error("Username not found")
+    else:
+        st.header("Register")
+        with st.form("register_form"):
+            register_username = st.text_input("Username", key="register_username")
+            register_email = st.text_input("Email", key="register_email")
+            register_name = st.text_input("Name", key="register_name")
+            register_password = st.text_input("Password", type="password", key="register_password")
+            register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
+            register_submitted = st.form_submit_button("Register")
+
+            if register_submitted:
+                if register_password != register_confirm_password:
+                    st.error("Passwords do not match!")
+                else:
+                    try:
+                        # Hash the password
+                        hashed_password = hash_password(register_password)
+
+                        # Save the user to the database
+                        user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
+                                       (register_username, register_email, register_name, hashed_password))
+                        user_conn.commit()
+                        st.success("User registered successfully! Please log in.")
+                    except sqlite3.IntegrityError:
+                        st.error("Username already exists. Please choose a different username.")
 
 # Check authentication status
 if st.session_state.get("authentication_status"):
@@ -150,7 +190,7 @@ if st.session_state.get("authentication_status"):
         st.success("Item deleted successfully!")
 
     # Streamlit App
-    st.title("Bill Tracker Application")
+    st.title("Biller")
 
     # Upload image
     uploaded_file = st.file_uploader("Upload a photo of your bill", type=["jpg", "jpeg", "png"])
@@ -238,31 +278,6 @@ if st.session_state.get("authentication_status"):
 #    st.error("Username/password is incorrect")
 elif st.session_state.get("authentication_status") is None:
     st.warning("Please enter your username and password")
-
-# Registration widget (only show if not logged in)
-if not st.session_state.get("authentication_status"):
-    st.header("Register")
-    register_username = st.text_input("Username", key="register_username")
-    register_email = st.text_input("Email", key="register_email")
-    register_name = st.text_input("Name", key="register_name")
-    register_password = st.text_input("Password", type="password", key="register_password")
-    register_confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_password")
-
-    if st.button("Register"):
-        if register_password != register_confirm_password:
-            st.error("Passwords do not match!")
-        else:
-            try:
-                # Hash the password
-                hashed_password = hash_password(register_password)
-
-                # Save the user to the database
-                user_c.execute("INSERT INTO users (username, email, name, password) VALUES (?, ?, ?, ?)",
-                               (register_username, register_email, register_name, hashed_password))
-                user_conn.commit()
-                st.success("User registered successfully! Please log in.")
-            except sqlite3.IntegrityError:
-                st.error("Username already exists. Please choose a different username.")
 
 # Close user credentials database connection
 user_conn.close()
