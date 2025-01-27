@@ -1,8 +1,8 @@
-# Bill Tracker Application
+# Biller - Your friendly Bill Management System
 
 ## Overview
 
-The **Bill Tracker Application** is a Streamlit-based web application designed to help users manage and track their bills efficiently. The application allows users to upload images of their bills, extract relevant information using Google's Gemini API, and store the data in a SQLite database. Users can also manually enter bill details, view their spending history, and categorize expenses.
+The **Biller** is a Streamlit-based web application designed to help users manage and track their bills efficiently. The application allows users to upload images of their bills, extract relevant information using Google's Gemini API, and store the data in a SQLite database. Users can also manually enter bill details, view their spending history, and categorize expenses.
 
 ## Features
 
