@@ -30,8 +30,8 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 model = genai.GenerativeModel("gemini-1.5-flash")
-response = model.generate_content("Hello, world!")
-print(response.text)
+responsed = model.generate_content("Hello, world!")
+st.write("Gemini API Response:", responsed.text)
 
 # Initialize SQLite database for user credentials
 user_credentials_db_path = "user_credentials.db"
