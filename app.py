@@ -196,46 +196,46 @@ if st.session_state.get("authentication_status"):
 
     # Upload image
     uploaded_file = st.file_uploader("Upload a photo of your bill", type=["jpg", "jpeg", "png", "heic"])
-        if uploaded_file is not None:
-            try:
-                # Display the uploaded image
-                image = Image.open(uploaded_file)
-                st.image(image, caption="Uploaded Image.", use_column_width=True)
-    
-                # Prepare image data
-                with st.spinner("Processing image..."):
-                    image_data, mime_type = input_image_setup(uploaded_file)
-    
-                    # Process the bill using Gemini API
-                    extracted_text, amount, categorized_items = process_bill_with_gemini(image_data, mime_type)
-    
-                if extracted_text:
-                    st.success("Image processed successfully!")
-                    st.write("Categorized Items:", categorized_items)
-    
-                    # Pre-fill the amount field
-                    amount = st.number_input("Enter the amount", value=amount)
-                    description = st.text_input("Enter a description", value=extracted_text)
-    
-                    # Save to database
-                    if st.button("Save Bill"):
-                        date = datetime.now().strftime("%Y-%m-%d")
-                        if categorized_items:
-                            # Save each categorized item separately
-                            for item in categorized_items:
-                                c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
-                                          (date, item['category'], item['amount'], item['item']))
-                        else:
-                            # Save the entire bill as one entry
+    if uploaded_file is not None:
+        try:
+            # Display the uploaded image
+            image = Image.open(uploaded_file)
+            st.image(image, caption="Uploaded Image.", use_column_width=True)
+
+            # Prepare image data
+            with st.spinner("Processing image..."):
+                image_data, mime_type = input_image_setup(uploaded_file)
+
+                # Process the bill using Gemini API
+                extracted_text, amount, categorized_items = process_bill_with_gemini(image_data, mime_type)
+
+            if extracted_text:
+                st.success("Image processed successfully!")
+                st.write("Categorized Items:", categorized_items)
+
+                # Pre-fill the amount field
+                amount = st.number_input("Enter the amount", value=amount)
+                description = st.text_input("Enter a description", value=extracted_text)
+
+                # Save to database
+                if st.button("Save Bill"):
+                    date = datetime.now().strftime("%Y-%m-%d")
+                    if categorized_items:
+                        # Save each categorized item separately
+                        for item in categorized_items:
                             c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
-                                      (date, "miscellaneous", amount, description))
-                        conn.commit()
-                        st.success("Bill saved successfully!")
-            except UnidentifiedImageError:
-                st.error("Unsupported image format. Please upload PNG, JPEG, or HEIC images.")
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
-                st.error(f"Details: {str(e)}")
+                                      (date, item['category'], item['amount'], item['item']))
+                    else:
+                        # Save the entire bill as one entry
+                        c.execute("INSERT INTO bills (date, category, amount, description) VALUES (?, ?, ?, ?)",
+                                  (date, "miscellaneous", amount, description))
+                    conn.commit()
+                    st.success("Bill saved successfully!")
+        except UnidentifiedImageError:
+            st.error("Unsupported image format. Please upload PNG, JPEG, or HEIC images.")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+            st.error(f"Details: {str(e)}")
 
     # Manual entry option
     st.header("Manual Entry")
