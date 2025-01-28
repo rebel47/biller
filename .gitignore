@@ -4,3 +4,4 @@ config.yaml
 test.py
 secrets.toml
 user_credentials.db
+bills_ayaz.db

@@ -237,7 +237,7 @@ if st.session_state.get("authentication_status"):
                 
                 # Pre-fill the amount field with extracted amount
                 #amount = st.number_input("Enter the amount", value=amount)
-                #description = st.text_input("Enter a description", value=extracted_text)
+                description = st.text_input("Enter a description", value=extracted_text)
 
                 # Save to database
                 if st.button("Save Bill"):
