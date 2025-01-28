@@ -127,6 +127,7 @@ def process_bill_with_gemini(image_data, mime_type):
         )
 
         amount = extract_amount(response.text)
+        print(response.text)
         categorized_items = extract_categorized_items(response.text)
         return response.text, amount, categorized_items
 
