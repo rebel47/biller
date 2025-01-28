@@ -89,12 +89,6 @@ def process_bill_with_gemini(image_data, mime_type):
     try:
         model = genai.GenerativeModel(
             "gemini-1.5-flash",
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-            ]
         )
 
         prompt = """
@@ -110,19 +104,10 @@ def process_bill_with_gemini(image_data, mime_type):
         - Item 1: €XX.XX (Category: grocery/utensil/clothing/miscellaneous)
         - Item 2: €XX.XX (Category: grocery/utensil/clothing/miscellaneous)
         """
-
-        generation_config = {
-            "temperature": 0.1,
-            "top_p": 1,
-            "top_k": 32,
-            "max_output_tokens": 2048,
-        }
+        generation_config = {"temperature": 0.1, "top_p": 1, "top_k": 32, "max_output_tokens": 2048}
         
         response = model.generate_content(
-            [
-                {"mime_type": mime_type, "data": image_data},
-                prompt
-            ],
+            [{"mime_type": mime_type, "data": image_data}, prompt],
             generation_config=generation_config
         )
 
@@ -133,7 +118,6 @@ def process_bill_with_gemini(image_data, mime_type):
     except Exception as e:
         st.error(f"Error processing bill with Gemini: {str(e)}")
         return None, 0.0, None
-
 
 def delete_item(item_id):
     c.execute("DELETE FROM bills WHERE id = ?", (item_id,))
