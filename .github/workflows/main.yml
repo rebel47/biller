@@ -2,7 +2,7 @@ name: Ping Streamlit App
 
 on:
   schedule:
-    - cron: '*/1 * * * *'  # Runs every 15 minutes
+    - cron: '*/15 * * * *'  # Runs every 15 minutes
 
 jobs:
   ping:
@@ -26,21 +26,24 @@ jobs:
       run: |
         echo '{"type": "module"}' > package.json
 
-    - name: Ping Streamlit App
+    - name: Create ping.mjs script
       run: |
-        echo "import { chromium } from 'playwright';" > ping.js
-        echo "(async () => {" >> ping.js
-        echo "  const browser = await chromium.launch({ headless: true });" >> ping.js
-        echo "  const page = await browser.newPage();" >> ping.js
-        echo "  try {" >> ping.js
-        echo "    const response = await page.goto('https://biller.streamlit.app/');" >> ping.js
-        echo "    console.log('HTTP Status Code:', response.status());" >> ping.js
-        echo "    console.log('Final URL:', response.url());" >> ping.js
-        echo "    console.log('Pinged Streamlit app at:', new Date().toISOString());" >> ping.js
-        echo "  } catch (error) {" >> ping.js
-        echo "    console.error('Error pinging Streamlit app:', error);" >> ping.js
-        echo "  } finally {" >> ping.js
-        echo "    await browser.close();" >> ping.js
-        echo "  }" >> ping.js
-        echo "})();" >> ping.js
-        node ping.js
+        echo "import { chromium } from 'playwright';" > ping.mjs
+        echo "(async () => {" >> ping.mjs
+        echo "  const browser = await chromium.launch({ headless: true });" >> ping.mjs
+        echo "  const page = await browser.newPage();" >> ping.mjs
+        echo "  try {" >> ping.mjs
+        echo "    const response = await page.goto('https://biller.streamlit.app/');" >> ping.mjs
+        echo "    console.log('HTTP Status Code:', response.status());" >> ping.mjs
+        echo "    console.log('Final URL:', response.url());" >> ping.mjs
+        echo "    console.log('Pinged Streamlit app at:', new Date().toISOString());" >> ping.mjs
+        echo "  } catch (error) {" >> ping.mjs
+        echo "    console.error('Error pinging Streamlit app:', error);" >> ping.mjs
+        echo "  } finally {" >> ping.mjs
+        echo "    await browser.close();" >> ping.mjs
+        echo "  }" >> ping.mjs
+        echo "})();" >> ping.mjs
+
+    - name: Run ping.mjs script
+      run: |
+        node ping.mjs
