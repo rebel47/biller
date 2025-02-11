@@ -18,7 +18,7 @@ The **Biller** is a Streamlit-based web application designed to help users manag
 
 Before running the application, ensure you have the following installed:
 
-- Python 3.7 or higher
+- Python 3.7+
 - Streamlit
 - SQLite3
 - Google Generative AI API
